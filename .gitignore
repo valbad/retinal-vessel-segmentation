@@ -35,6 +35,12 @@ data/
 results/
 checkpoints/
 
+# Scratch / legacy code
+temp/
+
+# Root-level exploratory notebooks
+test_data.ipynb
+
 # macOS
 .DS_Store
 
