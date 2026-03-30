@@ -38,6 +38,9 @@ checkpoints/
 # Scratch / legacy code
 temp/
 
+# Specs
+specs/
+
 # Root-level exploratory notebooks
 test_data.ipynb
 
