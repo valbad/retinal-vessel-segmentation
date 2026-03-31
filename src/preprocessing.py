@@ -24,9 +24,7 @@ import imageio.v2 as imageio
 Array = np.ndarray
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def _to_float01(image: Array) -> Array:
     """Convert any image array to float32 in [0, 1]."""
@@ -59,9 +57,7 @@ def _percentile_normalize(
     return np.clip((x - lo) / (hi - lo), 0.0, 1.0).astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
 # Step 1 — Channel extraction
-# ---------------------------------------------------------------------------
 
 def extract_green_channel(image: Array) -> Array:
     """
@@ -86,9 +82,7 @@ def extract_green_channel(image: Array) -> Array:
     return _to_float01(image if image.ndim == 2 else image[..., 0])
 
 
-# ---------------------------------------------------------------------------
 # Step 2 — Luminosity & contrast normalisation  (Foracchia et al., 2005)
-# ---------------------------------------------------------------------------
 
 def normalize_luminosity_contrast(
     image: Array,
@@ -98,19 +92,19 @@ def normalize_luminosity_contrast(
     eps: float = 1e-6,
 ) -> Array:
     """
-    Estimate and remove spatially varying luminosity (L̂) and contrast (Ĉ) drifts.
+    Estimate and remove spatially varying luminosity (L_hat) and contrast (C_hat) drifts.
 
-    Model:  I(x,y) = C(x,y)·I°(x,y) + L(x,y)
-    Estimate:  Î°(x,y) = (I(x,y) − L̂(x,y)) / Ĉ(x,y)
+    Model:  I(x,y) = C(x,y)*I_0(x,y) + L(x,y)
+    Estimate:  I_norm(x,y) = (I(x,y) - L_hat(x,y)) / C_hat(x,y)
 
     Algorithm
     ---------
     a. Partition image into square tiles of side `window_size_px`.
-    b. Compute per-tile mean μ and std σ.
-    c. Bicubic-interpolate μ and σ grids to full resolution.
-    d. Mark background pixels: |I − μ_full| / σ_full < threshold.
-    e. Re-estimate L̂ and Ĉ from background pixels only, bicubic-interpolate.
-    f. Apply: Î° = (I − L̂) / Ĉ, then rescale to [0, 1].
+    b. Compute per-tile mean mu and std sigma.
+    c. Bicubic-interpolate mu and sigma grids to full resolution.
+    d. Mark background pixels: |I - mu_full| / sigma_full < threshold.
+    e. Re-estimate L_hat and C_hat from background pixels only, bicubic-interpolate.
+    f. Apply: I_norm = (I - L_hat) / C_hat, then rescale to [0, 1].
 
     Parameters
     ----------
@@ -132,9 +126,7 @@ def normalize_luminosity_contrast(
     ny = int(np.ceil(H / s))
     nx = int(np.ceil(W / s))
 
-    # ------------------------------------------------------------------
     # Steps a + b: per-tile mean and std
-    # ------------------------------------------------------------------
     mu_g = np.full((ny, nx), np.nan, dtype=np.float32)
     sg_g = np.full((ny, nx), np.nan, dtype=np.float32)
 
@@ -157,23 +149,17 @@ def normalize_luminosity_contrast(
     mu_g = np.where(np.isfinite(mu_g), mu_g, g_mu)
     sg_g = np.where(np.isfinite(sg_g) & (sg_g > eps), sg_g, g_sg)
 
-    # ------------------------------------------------------------------
     # Step c: bicubic interpolation of grid → full resolution
-    # ------------------------------------------------------------------
     mu_full = _resize(mu_g, (H, W), order=3, mode="reflect",
                       anti_aliasing=False, preserve_range=True).astype(np.float32)
     sg_full = _resize(sg_g, (H, W), order=3, mode="reflect",
                       anti_aliasing=False, preserve_range=True).astype(np.float32)
 
-    # ------------------------------------------------------------------
     # Step d: background mask
-    # ------------------------------------------------------------------
     d_M = np.abs(img - mu_full) / np.maximum(sg_full, eps)
     bg_mask = (d_M < threshold) & fov
 
-    # ------------------------------------------------------------------
-    # Step e: re-estimate L̂ and Ĉ from background pixels
-    # ------------------------------------------------------------------
+    # Step e: re-estimate L_hat and C_hat from background pixels
     L_g = np.full((ny, nx), np.nan, dtype=np.float32)
     C_g = np.full((ny, nx), np.nan, dtype=np.float32)
 
@@ -204,9 +190,7 @@ def normalize_luminosity_contrast(
         c_floor = max(float(np.percentile(C_hat[fov], 5.0)), eps)
         C_hat = np.maximum(C_hat, c_floor)
 
-    # ------------------------------------------------------------------
     # Step f: normalise and rescale to [0, 1]
-    # ------------------------------------------------------------------
     norm = (img - L_hat) / np.maximum(C_hat, eps)
 
     # Rescale within FOV
@@ -222,9 +206,7 @@ def normalize_luminosity_contrast(
     return np.clip(norm, 0.0, 1.0).astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
 # Step 3 — Geodesic opening
-# ---------------------------------------------------------------------------
 
 def geodesic_opening(image: Array, kernel_size_px: int) -> Array:
     """
@@ -254,9 +236,7 @@ def geodesic_opening(image: Array, kernel_size_px: int) -> Array:
     return opened.astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
 # Step 4 — Top-hat transform
-# ---------------------------------------------------------------------------
 
 def top_hat_transform(image: Array, kernel_size_px: int) -> Array:
     """
@@ -273,7 +253,7 @@ def top_hat_transform(image: Array, kernel_size_px: int) -> Array:
     Parameters
     ----------
     image : float32, (H, W)  — output of geodesic_opening
-    kernel_size_px : disk radius (same Wt/2ρ as geodesic opening)
+    kernel_size_px : disk radius (same Wt/2rho as geodesic opening)
 
     Returns
     -------
@@ -285,9 +265,7 @@ def top_hat_transform(image: Array, kernel_size_px: int) -> Array:
     return np.clip(result, 0.0, 1.0).astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
 # Full pipeline
-# ---------------------------------------------------------------------------
 
 def preprocess(
     image: Array,
@@ -305,11 +283,11 @@ def preprocess(
     image : np.ndarray
         Raw image — uint8 RGB (H, W, 3) or uint8/float grayscale (H, W).
     pixel_size_um : float
-        Physical pixel size in μm/px.  DRIVE: 27.0
+        Physical pixel size in mum/px.  DRIVE: 27.0
     Wl_um : float
-        Luminosity normalisation window size in μm.  Default 500 μm.
+        Luminosity normalisation window size in mum.  Default 500 mum.
     Wt_um : float
-        Top-hat / geodesic opening kernel size in μm.  Default 150 μm.
+        Top-hat / geodesic opening kernel size in mum.  Default 150 mum.
     is_rgb : bool
         True for colour fundus images; False for SLO/grayscale.
     fov_mask : np.ndarray or None
@@ -342,9 +320,7 @@ def preprocess(
     return img
 
 
-# ---------------------------------------------------------------------------
 # DRIVE dataset I/O helpers
-# ---------------------------------------------------------------------------
 
 def _load_image(path: str) -> Array:
     """Load any image file as a raw numpy array."""
@@ -373,8 +349,8 @@ def load_drive_sample(
     ----------
     drive_paths : dict mapping sample_id → {"image": ..., "mask": ..., "manual": ...}
     sample_id : key into drive_paths
-    pixel_size_um : DRIVE physical pixel size (default 27 μm/px)
-    Wl_um, Wt_um : preprocessing window sizes in μm
+    pixel_size_um : DRIVE physical pixel size (default 27 mum/px)
+    Wl_um, Wt_um : preprocessing window sizes in mum
 
     Returns
     -------

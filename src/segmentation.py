@@ -1,7 +1,7 @@
 """
 SPEC_06 — Segmentation and Evaluation Metrics
 ==============================================
-Converts the enhanced float image Υ(f) to a binary vessel map and
+Converts the enhanced float image Upsilon(f) to a binary vessel map and
 computes performance metrics against ground-truth annotations.
 
 All metrics are evaluated *within the FOV mask*.
@@ -11,7 +11,7 @@ Metrics
 Se   = TP / (TP + FN)            Sensitivity (True Positive Rate)
 Sp   = TN / (TN + FP)            Specificity (True Negative Rate)
 Acc  = (TP + TN) / N             Accuracy
-MCC  = (TP/N − S·P) / √(P·S·(1−S)·(1−P))   Matthews Correlation Coefficient
+MCC  = (TP/N - S*P) / sqrt(P*S*(1-S)*(1-P))   Matthews Correlation Coefficient
 AUC                               Area Under ROC Curve
 
 Thresholds T_h (from paper Table II, MCC-optimal per dataset):
@@ -26,9 +26,7 @@ import numpy as np
 Array = np.ndarray
 
 
-# ---------------------------------------------------------------------------
 # Hard segmentation
-# ---------------------------------------------------------------------------
 
 def segment(
     enhanced: Array,
@@ -66,9 +64,7 @@ def segment(
     return binary_map.astype(bool)
 
 
-# ---------------------------------------------------------------------------
 # Confusion matrix
-# ---------------------------------------------------------------------------
 
 def confusion_matrix(
     pred: Array,
@@ -105,9 +101,7 @@ def confusion_matrix(
     return {'TP': TP, 'FP': FP, 'TN': TN, 'FN': FN, 'N': TP + FP + TN + FN}
 
 
-# ---------------------------------------------------------------------------
 # Scalar metrics
-# ---------------------------------------------------------------------------
 
 def compute_se_sp_acc(cm: dict) -> dict:
     """
@@ -130,7 +124,7 @@ def compute_mcc(cm: dict) -> float:
     """
     Matthews Correlation Coefficient.
 
-    MCC = (TP/N − S·P) / √(P·S·(1−S)·(1−P))
+    MCC = (TP/N - S*P) / sqrt(P*S*(1-S)*(1-P))
 
     where S = (TP+FN)/N (prevalence) and P = (TP+FP)/N (predicted prevalence).
     Returns 0.0 for degenerate cases (all-positive or all-negative predictions).
@@ -148,9 +142,7 @@ def compute_mcc(cm: dict) -> float:
     return float(numerator / denominator)
 
 
-# ---------------------------------------------------------------------------
 # ROC curve and AUC
-# ---------------------------------------------------------------------------
 
 def compute_roc_auc(
     enhanced: Array,
@@ -202,9 +194,7 @@ def compute_roc_auc(
     }
 
 
-# ---------------------------------------------------------------------------
 # Threshold optimisation (MCC-based, global across a dataset)
-# ---------------------------------------------------------------------------
 
 def find_optimal_threshold_mcc(
     enhanced_images: List[Array],
@@ -238,9 +228,7 @@ def find_optimal_threshold_mcc(
     return float(thresholds[best_idx]), float(mcc_values[best_idx])
 
 
-# ---------------------------------------------------------------------------
 # FOV mask utilities
-# ---------------------------------------------------------------------------
 
 def load_fov_mask(mask_path: str) -> Array:
     """
@@ -275,9 +263,7 @@ def create_circular_fov_mask(image_shape: tuple, margin: int = 5) -> Array:
     return ((X - cx)**2 + (Y - cy)**2 <= r**2).astype(bool)
 
 
-# ---------------------------------------------------------------------------
 # All-in-one evaluation
-# ---------------------------------------------------------------------------
 
 def evaluate_segmentation(
     pred: Array,
@@ -317,9 +303,7 @@ def evaluate_segmentation(
     }
 
 
-# ---------------------------------------------------------------------------
 # Per-dataset thresholds from the paper (Table II)
-# ---------------------------------------------------------------------------
 
 DATASET_THRESHOLDS = {
     'drive':     0.5540,

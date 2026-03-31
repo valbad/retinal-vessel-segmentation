@@ -1,18 +1,18 @@
 """
 SPEC_03 — Orientation Score Transform
 ======================================
-Lifts a 2D image f(x) to a 3D orientation score U_f(x, θ) on SE(2) = R² ⋊ S¹.
+Lifts a 2D image f(x) to a 3D orientation score U_f(x, theta) on SE(2) = R^2 rtimes S^1.
 
-Forward transform (Wψ):
-    U_f(x, θ_i) = (ψ̄_θ ★ f)(x)
-    In Fourier:  F[U_f(·, θ_i)](ω) = conj(F[ψ_i](ω)) · F[f](ω)
+Forward transform (Wpsi):
+    U_f(x, theta_i) = (psi_bar_theta * f)(x)
+    In Fourier:  F[U_f(*, theta_i)](omega) = conj(F[psi_i](omega)) * F[f](omega)
 
-Inverse transform (approximate reconstruction, valid when M_ψ ≈ 1):
-    f_approx(x) = (1/No) Σ_i Re[U_f(x, θ_i)]
+Inverse transform (approximate reconstruction, valid when M_psi ~= 1):
+    f_approx(x) = (1/No) Sum_i Re[U_f(x, theta_i)]
 
 Convention
 ----------
-U_f.shape = (No, H, W),  U_f[i, y, x] = value at pixel (x,y) and orientation θ_i = i·π/No.
+U_f.shape = (No, H, W),  U_f[i, y, x] = value at pixel (x,y) and orientation theta_i = i*pi/No.
 Only the real part of U_f is used downstream (real-valued cake wavelets).
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ def orientation_score_transform(
     Returns
     -------
     U_f : (No, H, W) complex64
-        Orientation score.  U_f[i] is the layer at orientation θ_i = i·π/No.
+        Orientation score.  U_f[i] is the layer at orientation theta_i = i*pi/No.
     """
     H, W = image.shape
     No = wavelets.shape[0]
@@ -50,10 +50,10 @@ def orientation_score_transform(
     U_f = np.zeros((No, H, W), dtype=np.complex64)
 
     for i in range(No):
-        # F[ψ_i] — transform wavelet to Fourier domain
+        # F[psi_i] — transform wavelet to Fourier domain
         F_wavelet = np.fft.fft2(wavelets[i].astype(np.complex128))
 
-        # Correlation (convolution with conjugate):  conj(F[ψ_i]) · F[f]
+        # Correlation (convolution with conjugate):  conj(F[psi_i]) * F[f]
         F_U_i = np.conj(F_wavelet) * F_image
 
         # Back to spatial domain
@@ -69,9 +69,9 @@ def inverse_orientation_score(
     """
     Approximate reconstruction of the original image from its orientation score.
 
-    Valid when the cake wavelets satisfy M_ψ ≈ 1 (partition-of-unity property).
+    Valid when the cake wavelets satisfy M_psi ~= 1 (partition-of-unity property).
 
-        f_approx(x) = (1/No) Σ_i Re[U_f(x, θ_i)]
+        f_approx(x) = (1/No) Sum_i Re[U_f(x, theta_i)]
 
     Parameters
     ----------

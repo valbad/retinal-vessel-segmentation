@@ -7,16 +7,16 @@ gives direct control over angular and radial selectivity.
 
 Mathematical definition (Bekkers et al., 2014, Section 2.3):
 
-    ψ̃_cake(ω) = B_k( (φ − π/2 − θ) / s_θ ) · M_N(ρ)
+    psi_tilde_cake(omega) = B_k( (phi - pi/2 - theta) / s_theta ) * M_N(rho)
 
 where:
-  ω = (ρ cos φ, ρ sin φ)  are polar Fourier coordinates
-  s_θ = 2π / No           is the angular resolution per slice
+  omega = (rho cos phi, rho sin phi)  are polar Fourier coordinates
+  s_theta = 2pi / No           is the angular resolution per slice
   B_k                     is the k-th order B-spline  (paper: k=2, quadratic)
-  M_N(ρ)                  is the radial window (smooth low-pass)
+  M_N(rho)                  is the radial window (smooth low-pass)
 
 Default parameters for all datasets in the paper:
-  No = 16,  k = 2,  N = 60,  γ = 0.9
+  No = 16,  k = 2,  N = 60,  gamma = 0.9
 """
 from __future__ import annotations
 
@@ -29,9 +29,7 @@ from scipy.special import gammaincc
 Array = np.ndarray
 
 
-# ---------------------------------------------------------------------------
 # Parameters dataclass
-# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class CakeWaveletParams:
@@ -60,10 +58,7 @@ class CakeWaveletParams:
     spatial_window_sigma: Optional[float] = None
 
 
-# ---------------------------------------------------------------------------
 # Radial window  M_N
-# ---------------------------------------------------------------------------
-
 def make_radial_window(
     rho: Array,
     N: int = 60,
@@ -73,19 +68,19 @@ def make_radial_window(
     """
     Compute the radial window M_N as defined in SPEC_02.
 
-    M_N(ρ²/t) = exp(−ρ²/t) · Σ_{k=0}^{N} (ρ²/t)^k / k!
+    M_N(rho^2/t) = exp(-rho^2/t) * Sum_{k=0}^{N} (rho^2/t)^k / k!
 
-    This equals the *regularised upper* incomplete gamma Q(N+1, u) = Γ(N+1, u)/Γ(N+1)
-    (scipy.special.gammaincc), which gives M_N(0)=1 and M_N(∞)=0 as expected.
+    This equals the *regularised upper* incomplete gamma Q(N+1, u) = Gamma(N+1, u)/Gamma(N+1)
+    (scipy.special.gammaincc), which gives M_N(0)=1 and M_N(inf)=0 as expected.
     Note: lower incomplete gamma (gammainc) is the complement and gives the wrong
     result — 0 in the passband and 1 at high frequencies.
 
     Parameters
     ----------
-    rho : array of radial frequencies (rad/px); Nyquist = π
+    rho : array of radial frequencies (rad/px); Nyquist = pi
     N : Taylor order  (paper: 60)
     gamma : inflection fraction of Nyquist  (paper: 0.9)
-    rho_nyq : Nyquist frequency in the same units as rho  (default π)
+    rho_nyq : Nyquist frequency in the same units as rho  (default pi)
 
     Returns
     -------
@@ -94,23 +89,20 @@ def make_radial_window(
     t = 2.0 * (gamma * rho_nyq) ** 2 / (1.0 + 2.0 * N)
     u = (rho.astype(np.float64) ** 2) / (t + 1e-300)
     # gammaincc(a, x) = regularised upper incomplete gamma Q(a, x) = 1 - P(a, x)
-    # Q(a, 0) = 1  (full passband at DC),  Q(a, ∞) = 0  (zero at very high freq)
+    # Q(a, 0) = 1  (full passband at DC),  Q(a, inf) = 0  (zero at very high freq)
     M = gammaincc(N + 1.0, u)
     return np.clip(M, 0.0, 1.0).astype(np.float32)
 
 
-# ---------------------------------------------------------------------------
 # Angular B-spline window
-# ---------------------------------------------------------------------------
-
 def _bspline2(x: Array) -> Array:
     """
     Quadratic B-spline B_2 evaluated at positions x.
 
     B_2(x) =
-        3/4 − x²              if |x| < 1/2
-        (3/2 − |x|)² / 2      if 1/2 ≤ |x| < 3/2
-        0                      if |x| ≥ 3/2
+        3/4 - x^2              if |x| < 1/2
+        (3/2 - |x|)^2 / 2      if 1/2 <= |x| < 3/2
+        0                      if |x| >= 3/2
     """
     ax = np.abs(x).astype(np.float32)
     result = np.zeros_like(ax)
@@ -123,29 +115,29 @@ def _bspline2(x: Array) -> Array:
 
 def make_bspline_angular(phi: Array, theta: float, No: int, k: int = 2) -> Array:
     """
-    Double-sided angular B-spline window for orientation θ.
+    Double-sided angular B-spline window for orientation theta.
 
-    SPEC_02 uses the half-circle convention (θ_i ∈ [0, π)), so each wavelet
-    must respond to *both* angle θ and the antipodal angle θ + π.  This is
+    SPEC_02 uses the half-circle convention (theta_i in [0, pi)), so each wavelet
+    must respond to *both* angle theta and the antipodal angle theta + pi.  This is
     what "double-sided" means: vessels look the same in both directions.
 
     The window is therefore the sum of two B-spline lobes:
-        w(φ) = B_k( wrap(φ − θ) / s_θ )  +  B_k( wrap(φ − θ − π) / s_θ )
+        w(phi) = B_k( wrap(phi - theta) / s_theta )  +  B_k( wrap(phi - theta - pi) / s_theta )
 
-    with s_θ = 2π / No.  The two lobes sit on opposite sides of the origin,
+    with s_theta = 2pi / No.  The two lobes sit on opposite sides of the origin,
     giving uniform coverage of the full Fourier circle when all No orientations
-    are summed — i.e., a flat admissibility function M_ψ.
+    are summed — i.e., a flat admissibility function M_psi.
 
     Parameters
     ----------
-    phi : (H, W) array of Fourier angles in (−π, π]
+    phi : (H, W) array of Fourier angles in (-pi, pi]
     theta : centre orientation (rad), half-circle convention
     No : total number of orientations
     k : B-spline order (must be 2)
 
     Returns
     -------
-    float32 (H, W) in [0, ∞).
+    float32 (H, W) in [0, inf).
     """
     if k != 2:
         raise NotImplementedError("Only quadratic B-spline (k=2) is implemented.")
@@ -159,10 +151,7 @@ def make_bspline_angular(phi: Array, theta: float, No: int, k: int = 2) -> Array
     return np.clip(w, 0.0, None)
 
 
-# ---------------------------------------------------------------------------
 # Main builder
-# ---------------------------------------------------------------------------
-
 def build_cake_wavelets(
     image_shape: Tuple[int, int],
     No: int = 16,
@@ -174,8 +163,8 @@ def build_cake_wavelets(
     """
     Build the full cake wavelet bank in the Fourier domain.
 
-    For each orientation θ_i = i·π/No (half-circle convention):
-        ψ̃_{θ_i}(ω) = B_k( wrap(φ − θ_i) / s_θ ) · M_N(ρ)
+    For each orientation theta_i = i*pi/No (half-circle convention):
+        psi_tilde_{theta_i}(omega) = B_k( wrap(phi - theta_i) / s_theta ) * M_N(rho)
     Optionally multiplied by a spatial Gaussian window.
 
     Parameters
@@ -195,9 +184,7 @@ def build_cake_wavelets(
     """
     H, W = image_shape
 
-    # ------------------------------------------------------------------
     # Step 1: Fourier coordinate grids
-    # ------------------------------------------------------------------
     fy = np.fft.fftfreq(H) * 2.0 * np.pi   # (H,)
     fx = np.fft.fftfreq(W) * 2.0 * np.pi   # (W,)
     FX, FY = np.meshgrid(fx, fy)            # (H, W)
@@ -205,18 +192,14 @@ def build_cake_wavelets(
     rho = np.sqrt(FX ** 2 + FY ** 2).astype(np.float32)
     phi = np.arctan2(FY, FX).astype(np.float32)
 
-    # ------------------------------------------------------------------
     # Step 2: Radial window
-    # ------------------------------------------------------------------
     M = make_radial_window(rho, N=N_radial, gamma=gamma)
 
-    # ------------------------------------------------------------------
     # Step 3: Per-orientation angular slice
-    # ------------------------------------------------------------------
     wavelets = np.zeros((No, H, W), dtype=np.complex64)
 
     for i in range(No):
-        # Half-circle convention: θ_i = i·π/No ∈ [0, π)
+        # Half-circle convention: theta_i = i*pi/No in [0, pi)
         theta_i = i * np.pi / float(No)
 
         B = make_bspline_angular(phi, theta=theta_i, No=No, k=order)
@@ -241,10 +224,7 @@ def build_cake_wavelets(
     return wavelets
 
 
-# ---------------------------------------------------------------------------
 # Convenience wrapper matching the CakeWaveletParams dataclass API
-# ---------------------------------------------------------------------------
-
 def cake_wavelet_bank(
     image_shape: Tuple[int, int],
     params: Optional[CakeWaveletParams] = None,
@@ -283,18 +263,16 @@ def cake_wavelet_bank_fft(
     return psi_fft
 
 
-# ---------------------------------------------------------------------------
 # Diagnostics
-# ---------------------------------------------------------------------------
 
 def wavelet_admissibility(wavelets: Array) -> Array:
     """
-    Compute the discrete admissibility function M_ψ(ω).
+    Compute the discrete admissibility function M_psi(omega).
 
-    M_ψ(ω) = Σ_i |ψ̂_i(ω)|²
+    M_psi(omega) = Sum_i |psi_hat_i(omega)|^2
 
-    Should be approximately constant (≈ 1 after normalisation) in the passband.
-    A flat M_ψ ensures an approximate stable inverse transform.
+    Should be approximately constant (~= 1 after normalisation) in the passband.
+    A flat M_psi ensures an approximate stable inverse transform.
 
     Parameters
     ----------
